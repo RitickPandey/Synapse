@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Synapse</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #000000;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #ededed;
+      height: 100vh;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: 50px 1fr auto;
+    }
+    header {
+      background: #000000;
+      height: 50px;
+      padding-left: 5rem;
+      padding-right: 1.5rem;
+      -webkit-app-region: drag;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .logo { font-weight: 500; font-size: 1.1rem; color: #ededed; letter-spacing: -0.01em; }
+    .badges {
+      -webkit-app-region: no-drag;
+      display: flex; gap: 1.2rem; font-size: 0.85rem; font-weight: 400;
+      align-items: center; color: #888;
+    }
+    .badge-gpt, .badge-gemini, .badge-claude { display: flex; align-items: center; }
+    .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; }
+    .dot.gpt    { background: #10a37f; }
+    .dot.gemini { background: #4285f4; }
+    .dot.claude { background: #d97757; }
+    main {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      height: 100%; width: 100%; background: #000000;
+    }
+    .panel { display: flex; flex-direction: column; height: 100%; position: relative; }
+    .panel:not(:last-child) { border-right: 1px solid #1a1a1a; }
+    .panel-header {
+      height: 38px; background: #000000;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 1rem; font-size: 0.85rem;
+      border-bottom: 1px solid #1a1a1a; color: #888;
+    }
+    .status { font-size: 0.75rem; color: #555; }
+    webview { flex: 1; width: 100%; height: 100%; background: #fff; }
+    footer {
+      background: #000000; min-height: 68px;
+      border-top: 1px solid #1a1a1a;
+      display: flex; align-items: flex-end;
+      padding: 12px 1rem; gap: 1rem;
+    }
+    #attach-btn {
+      width: 44px; height: 44px; padding: 0; border-radius: 8px;
+      background: #0a0a0a; color: #888; font-size: 1.2rem;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; cursor: pointer; border: 1px solid #222;
+      transition: background 0.2s, color 0.2s;
+    }
+    #attach-btn:hover { background: #111; color: #fff; }
+    .input-wrapper {
+      flex: 1; position: relative; display: flex; flex-direction: column;
+      background: #0a0a0a; border-radius: 8px; border: 1px solid #222;
+      transition: border 0.2s;
+    }
+    .input-wrapper:focus-within { border-color: #444; }
+    #attachments-container { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 1rem; }
+    .attachment-pill {
+      background: #111; border: 1px solid #222; font-size: 0.75rem;
+      padding: 4px 10px; border-radius: 6px;
+      display: flex; align-items: center; gap: 6px; color: #aaa; margin-top: 8px;
+    }
+    .remove-file { cursor: pointer; color: #f85149; font-weight: bold; }
+    .remove-file:hover { filter: brightness(1.2); }
+    input[type="text"] {
+      width: 100%; height: 44px; background: transparent; border: none;
+      border-radius: 8px; color: #ededed; padding: 0 1.2rem;
+      font-size: 0.95rem; outline: none;
+    }
+    input[type="text"]::placeholder { color: #555; }
+    #send-btn {
+      height: 44px; padding: 0 1.5rem; border-radius: 8px;
+      border: 1px solid #222; background: #ededed; color: #000;
+      font-weight: 500; font-size: 0.9rem; cursor: pointer;
+      transition: background 0.2s; outline: none; flex-shrink: 0;
+    }
+    #send-btn:hover:not(:disabled) { background: #ffffff; }
+    #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">Synapse</div>
+    <div class="badges">
+      <span class="badge-gpt"><span class="dot gpt"></span>GPT</span>
+      <span class="badge-gemini"><span class="dot gemini"></span>Gemini</span>
+      <span class="badge-claude"><span class="dot claude"></span>Claude</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="panel gpt">
+      <div class="panel-header">
+        <div style="display:flex;align-items:center;"><span class="dot gpt"></span>&nbsp;GPT</div>
+        <span class="status" id="status-gpt">waiting...</span>
+      </div>
+      <webview id="wv-gpt" useragent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" allowpopups></webview>
+    </div>
+    <div class="panel gemini">
+      <div class="panel-header">
+        <div style="display:flex;align-items:center;"><span class="dot gemini"></span>&nbsp;Gemini</div>
+        <span class="status" id="status-gemini">waiting...</span>
+      </div>
+      <webview id="wv-gemini" useragent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" allowpopups></webview>
+    </div>
+    <div class="panel claude">
+      <div class="panel-header">
+        <div style="display:flex;align-items:center;"><span class="dot claude"></span>&nbsp;Claude</div>
+        <span class="status" id="status-claude">waiting...</span>
+      </div>
+      <webview id="wv-claude" useragent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" allowpopups></webview>
+    </div>
+  </main>
+
+  <footer>
+    <button id="attach-btn" title="Attach files">📎</button>
+    <div class="input-wrapper">
+      <div id="attachments-container"></div>
+      <input type="file" id="file-picker" multiple style="display:none;">
+      <input type="text" id="search-input" placeholder="Ask anything (or attach files)..." autocomplete="off">
+    </div>
+    <button id="send-btn">Send to All 🚀</button>
+  </footer>
+
+  <script>
+    let selectedFiles = []
+    const searchInput          = document.getElementById('search-input')
+    const sendBtn              = document.getElementById('send-btn')
+    const attachBtn            = document.getElementById('attach-btn')
+    const filePicker           = document.getElementById('file-picker')
+    const attachmentsContainer = document.getElementById('attachments-container')
+    const wvGpt                = document.getElementById('wv-gpt')
+    const wvGemini             = document.getElementById('wv-gemini')
+    const wvClaude             = document.getElementById('wv-claude')
+    const statusGpt            = document.getElementById('status-gpt')
+    const statusGemini         = document.getElementById('status-gemini')
+    const statusClaude         = document.getElementById('status-claude')
+
+    // ── Staggered loading ────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+      updateStatus(statusGpt, 'loading...')
+      wvGpt.src = 'https://chat.openai.com'
+      const loadGemini = () => { if (!wvGemini.src || wvGemini.src === 'about:blank') { updateStatus(statusGemini, 'loading...'); wvGemini.src = 'https://gemini.google.com/app' } }
+      const loadClaude = () => { if (!wvClaude.src || wvClaude.src === 'about:blank') { updateStatus(statusClaude, 'loading...'); wvClaude.src = 'https://claude.ai/new' } }
+      wvGpt.addEventListener('dom-ready',    () => { updateStatus(statusGpt,    'ready'); setTimeout(loadGemini, 500) })
+      wvGemini.addEventListener('dom-ready', () => { updateStatus(statusGemini, 'ready'); setTimeout(loadClaude, 500) })
+      wvClaude.addEventListener('dom-ready', () => { updateStatus(statusClaude, 'ready') })
+      setTimeout(loadGemini, 4000)
+      setTimeout(loadClaude, 8000)
+    })
+
+    searchInput.addEventListener('blur', () => setTimeout(() => searchInput.focus(), 40))
+    window.onload = () => setTimeout(() => searchInput.focus(), 300)
+
+    attachBtn.addEventListener('click', () => filePicker.click())
+    filePicker.addEventListener('change', (e) => {
+      for (const file of e.target.files) {
+        const reader = new FileReader()
+        reader.onload = (ev) => {
+          selectedFiles.push({ name: file.name, type: file.type || 'application/octet-stream', dataUrl: ev.target.result })
+          renderAttachments()
+        }
+        reader.readAsDataURL(file)
+      }
+      filePicker.value = ''
+    })
+
+    function renderAttachments() {
+      attachmentsContainer.innerHTML = ''
+      selectedFiles.forEach((f, idx) => {
+        const pill = document.createElement('div')
+        pill.className = 'attachment-pill'
+        pill.innerHTML = `<span>📎 ${f.name}</span><span class="remove-file" data-idx="${idx}">×</span>`
+        attachmentsContainer.appendChild(pill)
+      })
+      attachmentsContainer.querySelectorAll('.remove-file').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          selectedFiles.splice(parseInt(e.target.getAttribute('data-idx')), 1)
+          renderAttachments()
+        })
+      })
+    }
+
+    function updateStatus(el, text) {
+      el.textContent = text
+      el.style.color = text.includes('✓') ? '#4ade80' : 'rgba(255,255,255,0.45)'
+    }
+
+    function sendQuery() {
+      const q = searchInput.value.trim()
+      if (!q && selectedFiles.length === 0) return
+      const filesPayload = [...selectedFiles]
+      selectedFiles = []
+      renderAttachments()
+      searchInput.value = ''
+      sendBtn.disabled = true
+      setTimeout(() => { sendBtn.disabled = false }, 10000)
+      updateStatus(statusGpt,    'sending...')
+      updateStatus(statusGemini, 'sending...')
+      updateStatus(statusClaude, 'sending...')
+      sendToGPT(q, filesPayload)
+      sendToGemini(q, filesPayload) // async, fire-and-forget
+      sendToClaude(q, filesPayload)
+    }
+
+    sendBtn.addEventListener('click', sendQuery)
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendQuery() })
+
+    // Cmd+1 = GPT devtools, Cmd+2 = Gemini devtools, Cmd+3 = Claude devtools
+    window.addEventListener('keydown', e => {
+      if (e.metaKey && e.key === '1') wvGpt.openDevTools()
+      if (e.metaKey && e.key === '2') wvGemini.openDevTools()
+      if (e.metaKey && e.key === '3') wvClaude.openDevTools()
+    })
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHARED HELPERS
+    // ─────────────────────────────────────────────────────────────────────────
+    const HELPERS = `
+      function dataUrlToBlob(dataUrl) {
+        // Decode data: URL without fetch() which doesn't work in Electron webviews
+        const [header, b64] = dataUrl.split(',');
+        const mime = header.match(/:(.*?);/)[1];
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return new Blob([bytes], { type: mime });
+      }
+
+      function buildDT(files) {
+        const dt = new DataTransfer();
+        for (const f of files) {
+          const blob = dataUrlToBlob(f.dataUrl);
+          dt.items.add(new File([blob], f.name, { type: f.type || blob.type || 'application/octet-stream' }));
+        }
+        return dt;
+      }
+
+      function forceFiles(input, fileList) {
+        try {
+          const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files');
+          if (desc && desc.set) desc.set.call(input, fileList);
+          else input.files = fileList;
+        } catch(e) { try { input.files = fileList; } catch(_){} }
+        input.dispatchEvent(new Event('input',  { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      function injectAllInputs(fileList) {
+        // Target ALL file inputs including display:none / hidden ones
+        const inputs = [...document.querySelectorAll('input[type="file"]')];
+        inputs.forEach(inp => forceFiles(inp, fileList));
+        return inputs.length;
+      }
+
+      async function dropOnTarget(target, dt) {
+        if (!target) return;
+        for (const evName of ['dragenter','dragover','drop']) {
+          try {
+            const ev = new DragEvent(evName, { bubbles: true, cancelable: true, dataTransfer: dt });
+            target.dispatchEvent(ev);
+          } catch(e) {
+            const ev = new Event(evName, { bubbles: true, cancelable: true });
+            ev.dataTransfer = dt;
+            target.dispatchEvent(ev);
+          }
+          await new Promise(r => setTimeout(r, 80));
+        }
+      }
+
+      async function typeText(box, text) {
+        if (!text || !box) return;
+        box.focus(); box.click();
+        if (box.tagName === 'TEXTAREA' || box.tagName === 'INPUT') {
+          const desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+                    || Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+          if (desc && desc.set) desc.set.call(box, text);
+          else box.value = text;
+          box.dispatchEvent(new Event('input',  { bubbles: true }));
+          box.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          box.focus();
+          document.execCommand('selectAll', false, null);
+          document.execCommand('delete',    false, null);
+          if (!document.execCommand('insertText', false, text)) {
+            box.textContent = text;
+            box.dispatchEvent(new InputEvent('input', { bubbles: true, data: text }));
+          }
+        }
+      }
+
+      async function waitFor(selectors, ms = 10000) {
+        const sels = Array.isArray(selectors) ? selectors : [selectors];
+        const start = Date.now();
+        while (Date.now() - start < ms) {
+          for (const s of sels) {
+            try {
+              const el = document.querySelector(s);
+              if (el && el.offsetParent !== null) return el;
+            } catch(e) {}
+          }
+          await new Promise(r => setTimeout(r, 300));
+        }
+        return null;
+      }
+
+      function trySend(btnSelectors, fallbackBox, maxRetries) {
+        let attempts = 0;
+        function tryOnce() {
+          for (const s of btnSelectors) {
+            try {
+              const el = document.querySelector(s);
+              if (el && !el.disabled && el.getAttribute('aria-disabled') !== 'true' && el.offsetParent !== null) {
+                el.click(); return;
+              }
+            } catch(e) {}
+          }
+          attempts++;
+          if (attempts < maxRetries) setTimeout(tryOnce, 700);
+          else if (fallbackBox) {
+            fallbackBox.dispatchEvent(new KeyboardEvent('keydown', { key:'Enter', keyCode:13, bubbles:true, cancelable:true }));
+          }
+        }
+        setTimeout(tryOnce, 300);
+      }
+    `
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GPT — current ChatGPT UI has a "+" button that opens a popover menu,
+    // then "Upload from computer" which triggers a file input.
+    // We also try injecting directly into any hidden file inputs on the page.
+    // ─────────────────────────────────────────────────────────────────────────
+    function sendToGPT(q, files) {
+      updateStatus(statusGpt, 'typing...')
+      wvGpt.executeJavaScript(`
+        (async () => {
+          ${HELPERS}
+
+          const box = await waitFor([
+            '#prompt-textarea',
+            'div.ProseMirror[contenteditable]',
+            'textarea[data-id="root"]',
+            'div[contenteditable="true"]'
+          ]);
+          if (!box) { console.warn('[GPT] no composer found'); return; }
+
+          const files = ${JSON.stringify(files)};
+          if (files.length > 0) {
+            const dt = buildDT(files);
+
+            // Inject into FIRST file input only — injecting all causes duplicate dialog
+            const allFileInputs = [...document.querySelectorAll('input[type="file"]')];
+            let found = 0;
+            if (allFileInputs.length > 0) {
+              forceFiles(allFileInputs[0], dt.files);
+              found = 1;
+            } else {
+              // Click "+" to reveal file input
+              const plusBtn =
+                document.querySelector('button[aria-label="Add photos and files"]') ||
+                document.querySelector('button[aria-label*="photo" i]') ||
+                [...document.querySelectorAll('button')].find(b => {
+                  const lbl = (b.getAttribute('aria-label') || b.textContent || '').trim().toLowerCase();
+                  return (lbl === '+' || lbl.includes('add') || lbl.includes('attach') || lbl.includes('upload') || lbl.includes('file') || lbl.includes('photo')) && b.offsetParent;
+                });
+              if (plusBtn) {
+                plusBtn.click();
+                await new Promise(r => setTimeout(r, 900));
+                const uploadItem = [...document.querySelectorAll('[role="menuitem"], [role="option"], li, button, a')]
+                  .find(el => el.offsetParent && /upload|computer|file|device/i.test(el.textContent));
+                if (uploadItem) { uploadItem.click(); await new Promise(r => setTimeout(r, 700)); }
+                const inp = document.querySelector('input[type="file"]');
+                if (inp) { forceFiles(inp, dt.files); found = 1; }
+              }
+            }
+
+            // Dismiss "already uploaded" dialog if it appears
+            await new Promise(r => setTimeout(r, 700));
+            const okBtn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'OK' && b.offsetParent);
+            if (okBtn) { okBtn.click(); await new Promise(r => setTimeout(r, 400)); }
+
+            // Wait for thumbnail to appear
+            await new Promise(r => setTimeout(r, 2800));
+          }
+
+          await typeText(box, ${JSON.stringify(q)});
+          await new Promise(r => setTimeout(r, 500));
+
+          trySend([
+            'button[data-testid="send-button"]',
+            'button[aria-label="Send prompt"]',
+            'button[aria-label="Send message"]',
+            'form button[type="submit"]'
+          ], box, 25);
+        })();
+      `).then(() => updateStatus(statusGpt, 'sent ✓')).catch(e => { console.error('[GPT outer]', e); updateStatus(statusGpt, 'error') })
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GEMINI — navigates to new chat first, then uploads via CDP file intercept
+    // ─────────────────────────────────────────────────────────────────────────
+    async function sendToGemini(q, files) {
+      updateStatus(statusGemini, 'typing...')
+      const { ipcRenderer } = require('electron')
+
+      let tmpDir = null
+
+      if (files.length > 0) {
+        try {
+          const result = await ipcRenderer.invoke('write-temp-files', files)
+          tmpDir = result.tmpDir
+          await ipcRenderer.invoke('set-pending-files', result.filePaths)
+        } catch(e) {
+          console.warn('[Gemini] IPC error:', e)
+        }
+      }
+
+      // Navigate to fresh new chat page so the upload button is always present
+      // Gemini's upload button only exists on the new chat page, not conversation pages
+      if (files.length > 0) {
+        const currentUrl = wvGemini.src || ''
+        // Only reload if we're on a conversation page (URL has extra path after /app/)
+        if (currentUrl.match(/\/app\/[a-z0-9]+/i)) {
+          wvGemini.loadURL('https://gemini.google.com/app')
+          await new Promise(r => setTimeout(r, 3500))
+        }
+      }
+
+      wvGemini.executeJavaScript(`
+        (async () => {
+          ${HELPERS}
+
+          // Wait for the input box — if we just navigated, give it time
+          const box = await waitFor([
+            'div[contenteditable="true"][aria-label*="prompt" i]',
+            'rich-textarea div[contenteditable]',
+            '.ql-editor[contenteditable="true"]',
+            'div[contenteditable="true"][role="textbox"]',
+            'div[contenteditable="plaintext-only"]',
+            'textarea'
+          ], 12000);
+          if (!box) { console.warn('[Gemini] no box found'); return; }
+
+          const files = ${JSON.stringify(files)};
+          if (files.length > 0) {
+            const dt = buildDT(files);
+
+            // Try direct injection first
+            let found = injectAllInputs(dt.files);
+
+            if (found === 0) {
+              // Find the upload button — check both aria-labels
+              const uploadBtn =
+                document.querySelector('button[aria-label="Open upload file menu"]') ||
+                document.querySelector('button[aria-label*="upload" i]') ||
+                document.querySelector('button[aria-label*="attach" i]') ||
+                // The "+" button on new chat page
+                [...document.querySelectorAll('button')].find(b => {
+                  if (!b.offsetParent) return false;
+                  const lbl = (b.getAttribute('aria-label') || b.textContent || '').trim();
+                  return lbl === '+';
+                });
+
+              console.log('[Gemini] upload btn:', uploadBtn ? uploadBtn.getAttribute('aria-label') : 'NOT FOUND');
+
+              if (uploadBtn) {
+                uploadBtn.click();
+                await new Promise(r => setTimeout(r, 1000));
+
+                // Log all visible items to find the right one
+                const allVisible = [...document.querySelectorAll('[role="menuitem"], [role="option"], [role="listitem"], li, button, a, span, div[tabindex]')]
+                  .filter(el => el.offsetParent && el.textContent.trim().length > 0 && el.textContent.trim().length < 60)
+                  .map(el => el.textContent.trim().slice(0, 50));
+                console.log('[Gemini] visible items after click:', JSON.stringify(allVisible));
+
+                // Find upload file option
+                const fileItem = [...document.querySelectorAll('[role="menuitem"], [role="option"], [role="listitem"], li, button, a, span, div[tabindex]')]
+                  .find(el => {
+                    if (!el.offsetParent) return false;
+                    const t = (el.textContent.trim() + ' ' + (el.getAttribute('aria-label') || '')).toLowerCase();
+                    return (t.includes('upload') || t.includes('file') || t.includes('computer') || t.includes('document')) &&
+                           !t.includes('image') && !t.includes('photo') && !t.includes('camera') && !t.includes('take');
+                  });
+
+                console.log('[Gemini] file item:', fileItem ? fileItem.textContent.trim() : 'NOT FOUND');
+
+                if (fileItem) {
+                  fileItem.click();
+                  // CDP intercepts the file dialog
+                  await new Promise(r => setTimeout(r, 3500));
+                } else {
+                  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+                  await new Promise(r => setTimeout(r, 300));
+                  await dropOnTarget(box, dt);
+                  await new Promise(r => setTimeout(r, 2000));
+                }
+              } else {
+                await dropOnTarget(box, dt);
+                await new Promise(r => setTimeout(r, 2000));
+              }
+            } else {
+              await new Promise(r => setTimeout(r, 2500));
+            }
+          }
+
+          await typeText(box, ${JSON.stringify(q)});
+          await new Promise(r => setTimeout(r, 500));
+
+          trySend([
+            'button[aria-label*="Send" i]',
+            'button.send-button',
+            'button[jsname="Qx7uuf"]',
+            'button[data-mat-icon-name="send"]',
+            'button[mattooltip*="Send" i]'
+          ], box, 25);
+        })();
+      `).then(async () => {
+        updateStatus(statusGemini, 'sent ✓')
+        if (tmpDir) {
+          try { await ipcRenderer.invoke('cleanup-temp-files', tmpDir) } catch(e) {}
+        }
+      }).catch(() => updateStatus(statusGemini, 'error'))
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+    // CLAUDE — paperclip button → hidden file input (was already working)
+    // ─────────────────────────────────────────────────────────────────────────
+    function sendToClaude(q, files) {
+      updateStatus(statusClaude, 'typing...')
+      wvClaude.executeJavaScript(`
+        (async () => {
+          ${HELPERS}
+          const box = await waitFor([
+            'div.ProseMirror[contenteditable="true"]',
+            'div[contenteditable="true"].ProseMirror',
+            'div[contenteditable="true"]',
+            'textarea'
+          ]);
+          if (!box) { console.warn('[Claude] no box found'); return; }
+
+          const files = ${JSON.stringify(files)};
+          if (files.length > 0) {
+            const dt = buildDT(files);
+
+            // Step 1: try pre-existing file inputs
+            let found = injectAllInputs(dt.files);
+
+            // Step 2: click the paperclip/attach button
+            if (found === 0) {
+              const attachBtn =
+                document.querySelector('button[aria-label*="Attach" i]') ||
+                document.querySelector('button[aria-label*="attach" i]') ||
+                document.querySelector('button[data-testid*="attach" i]') ||
+                document.querySelector('button[data-testid*="file" i]');
+              if (attachBtn) {
+                attachBtn.click();
+                await new Promise(r => setTimeout(r, 600));
+                found = injectAllInputs(dt.files);
+              }
+            }
+
+            // Step 3: drop fallback
+            if (found === 0) {
+              await dropOnTarget(box, dt);
+            }
+
+            await new Promise(r => setTimeout(r, 3000));
+          }
+
+          await typeText(box, ${JSON.stringify(q)});
+          await new Promise(r => setTimeout(r, 400));
+
+          trySend([
+            'button[aria-label="Send Message"]',
+            'button[aria-label*="Send" i]',
+            'button[data-testid="send-button"]',
+            'button[type="submit"]'
+          ], box, 20);
+        })();
+      `).then(() => updateStatus(statusClaude, 'sent ✓')).catch(() => updateStatus(statusClaude, 'error'))
+    }
+  </script>
+</body>
+</html>
